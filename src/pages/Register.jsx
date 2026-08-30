@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import QRCode from "qrcode";
+import { supabase } from "../supabase";
 
 function Register() {
   const navigate = useNavigate();
@@ -19,10 +20,8 @@ function Register() {
   const [qrCode, setQrCode] = useState("");
   const [recoveryId, setRecoveryId] = useState("");
   const [recoveryUrl, setRecoveryUrl] = useState("");
-
   const [loading, setLoading] = useState(false);
 
-  // Handle input changes
   function handleChange(e) {
     const { name, value } = e.target;
 
@@ -32,7 +31,6 @@ function Register() {
     }));
   }
 
-  // Generate unique Recovery X ID
   function generateRecoveryId() {
     const randomPart = Math.random()
       .toString(36)
@@ -42,7 +40,6 @@ function Register() {
     return `RX-${randomPart}`;
   }
 
-  // Get current Google Maps location
   function getLocation() {
     if (!navigator.geolocation) {
       alert("Your browser does not support location services.");
@@ -64,12 +61,9 @@ function Register() {
           longitude: longitude.toString(),
         }));
       },
-
       (error) => {
         if (error.code === 1) {
-          alert(
-            "Location permission was denied. Please allow location access."
-          );
+          alert("Location permission was denied.");
         } else if (error.code === 2) {
           alert("Your location could not be found.");
         } else if (error.code === 3) {
@@ -78,7 +72,6 @@ function Register() {
           alert("Unable to get your location.");
         }
       },
-
       {
         enableHighAccuracy: true,
         timeout: 10000,
@@ -87,11 +80,9 @@ function Register() {
     );
   }
 
-  // Register item
   async function handleSubmit(e) {
     e.preventDefault();
 
-    // Check required fields
     if (
       !form.ownerName.trim() ||
       !form.mobile.trim() ||
@@ -103,110 +94,98 @@ function Register() {
       return;
     }
 
-    // Basic mobile validation
-    if (form.mobile.length < 10) {
-      alert("Please enter a valid mobile number.");
+    if (!/^\d{10}$/.test(form.mobile.trim())) {
+      alert("Please enter a valid 10-digit mobile number.");
       return;
     }
 
     setLoading(true);
 
     try {
-      // Generate unique ID
+      // Generate Recovery X ID
       const id = generateRecoveryId();
 
-      // Recovery page URL
+      // IMPORTANT:
+      // This is your PUBLIC Vercel website.
       const url =
-        `${window.location.origin}/recover/${id}`;
+        `https://recovery-pj0o4bpr9-varshithpattapuram14-3119s-projects.vercel.app/recover/${id}`;
 
-      // Generate real QR code
+      // Generate QR
       const qr = await QRCode.toDataURL(url, {
         width: 500,
         margin: 2,
         errorCorrectionLevel: "H",
       });
 
-      // Create item object
+      // Data sent to Supabase
+      // DO NOT send "id".
+      // Supabase generates the numeric id automatically.
       const newItem = {
-        id: id,
-
-        ownerName: form.ownerName.trim(),
-
+        recovery_id: id,
+        owner_name: form.ownerName.trim(),
         mobile: form.mobile.trim(),
-
         email: form.email.trim(),
-
-        itemName: form.itemName.trim(),
-
+        item_name: form.itemName.trim(),
         category: form.category,
-
-        location: form.location,
-
-        latitude: form.latitude,
-
-        longitude: form.longitude,
-
+        location: form.location || null,
+        latitude: form.latitude
+          ? parseFloat(form.latitude)
+          : null,
+        longitude: form.longitude
+          ? parseFloat(form.longitude)
+          : null,
         qr: qr,
-
-        recoveryUrl: url,
-
-        createdAt: new Date().toISOString(),
+        recovery_url: url,
       };
 
-      // Get existing items
-      const existingItems =
-        JSON.parse(
-          localStorage.getItem("recoveryXItems")
-        ) || [];
+      console.log("Sending to Supabase:", newItem);
 
-      // Save new item
-      localStorage.setItem(
-        "recoveryXItems",
-        JSON.stringify([
-          ...existingItems,
-          newItem,
-        ])
-      );
+      const { data, error } = await supabase
+        .from("items")
+        .insert([newItem])
+        .select()
+        .single();
 
-      // Show QR
+      if (error) {
+        console.error("SUPABASE ERROR:", error);
+        alert(`Database error: ${error.message}`);
+        return;
+      }
+
+      console.log("Successfully saved:", data);
+
       setRecoveryId(id);
       setQrCode(qr);
       setRecoveryUrl(url);
 
     } catch (error) {
-      console.error(error);
-      alert("Something went wrong while creating the QR code.");
+      console.error("REGISTRATION ERROR:", error);
+      alert(`Something went wrong while registering: ${error.message}`);
     } finally {
       setLoading(false);
     }
   }
 
-  // Download QR
   function downloadQR() {
     if (!qrCode) return;
 
     const link = document.createElement("a");
 
     link.href = qrCode;
-
-    link.download =
-      `${recoveryId}-Recovery-X.png`;
+    link.download = `${recoveryId}-Recovery-X.png`;
 
     document.body.appendChild(link);
-
     link.click();
-
     document.body.removeChild(link);
   }
 
-  // Open recovery page
   function openRecoveryPage() {
     navigate(`/recover/${recoveryId}`);
   }
 
-  // ------------------------------------------------
+  // =========================
   // SUCCESS SCREEN
-  // ------------------------------------------------
+  // =========================
 
   if (recoveryId) {
     return (
@@ -221,10 +200,7 @@ function Register() {
 
           <nav>
             <Link to="/">Home</Link>
-
-            <Link to="/dashboard">
-              My Items
-            </Link>
+            <Link to="/dashboard">My Items</Link>
           </nav>
 
         </header>
@@ -246,13 +222,9 @@ function Register() {
               been successfully created.
             </p>
 
-            {/* Recovery ID */}
-
             <div className="recovery-id">
               {recoveryId}
             </div>
-
-            {/* QR CODE */}
 
             <img
               src={qrCode}
@@ -265,11 +237,9 @@ function Register() {
             </h3>
 
             <p className="qr-info">
-              Download this QR code and
-              attach it to your item.
+              Download this QR code and attach
+              it to your item.
             </p>
-
-            {/* Recovery URL */}
 
             <div
               style={{
@@ -283,8 +253,6 @@ function Register() {
             >
               {recoveryUrl}
             </div>
-
-            {/* Buttons */}
 
             <div className="success-actions">
 
@@ -323,14 +291,12 @@ function Register() {
     );
   }
 
-  // ------------------------------------------------
-  // REGISTRATION FORM
-  // ------------------------------------------------
+  // =========================
+  // REGISTER FORM
+  // =========================
 
   return (
     <div className="app">
-
-      {/* NAVBAR */}
 
       <header className="navbar">
 
@@ -340,7 +306,6 @@ function Register() {
         </Link>
 
         <nav>
-
           <Link to="/">
             Home
           </Link>
@@ -348,12 +313,9 @@ function Register() {
           <Link to="/dashboard">
             My Items
           </Link>
-
         </nav>
 
       </header>
-
-      {/* MAIN FORM */}
 
       <main className="form-page">
 
@@ -382,7 +344,7 @@ function Register() {
           className="register-form"
         >
 
-          {/* OWNER INFORMATION */}
+          {/* OWNER */}
 
           <div className="form-section">
 
@@ -391,8 +353,6 @@ function Register() {
             </h2>
 
             <div className="form-grid">
-
-              {/* NAME */}
 
               <div className="input-group">
 
@@ -411,8 +371,6 @@ function Register() {
 
               </div>
 
-              {/* MOBILE */}
-
               <div className="input-group">
 
                 <label>
@@ -424,14 +382,12 @@ function Register() {
                   name="mobile"
                   value={form.mobile}
                   onChange={handleChange}
-                  placeholder="Enter mobile number"
+                  placeholder="Enter 10-digit mobile number"
                   maxLength="10"
                   required
                 />
 
               </div>
-
-              {/* EMAIL */}
 
               <div className="input-group full">
 
@@ -454,7 +410,7 @@ function Register() {
 
           </div>
 
-          {/* ITEM INFORMATION */}
+          {/* ITEM */}
 
           <div className="form-section">
 
@@ -463,8 +419,6 @@ function Register() {
             </h2>
 
             <div className="form-grid">
-
-              {/* ITEM NAME */}
 
               <div className="input-group">
 
@@ -482,8 +436,6 @@ function Register() {
                 />
 
               </div>
-
-              {/* CATEGORY */}
 
               <div className="input-group">
 
@@ -563,8 +515,6 @@ function Register() {
               📍 Use My Current Location
             </button>
 
-            {/* LOCATION SUCCESS */}
-
             {form.location && (
 
               <div
@@ -614,11 +564,9 @@ function Register() {
             className="generate-btn"
             disabled={loading}
           >
-
             {loading
-              ? "Generating..."
+              ? "Saving to Database..."
               : "Generate Recovery X ID & QR"}
-
           </button>
 
         </form>

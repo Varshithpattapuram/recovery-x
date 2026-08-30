@@ -14,7 +14,11 @@ function App() {
         <Route path="/" element={<Home />} />
         <Route path="/register" element={<Register />} />
         <Route path="/dashboard" element={<Dashboard />} />
-        <Route path="/recover/:id" element={<Recover />} />
+
+        <Route
+          path="/recover/:recoveryId"
+          element={<Recover />}
+        />
       </Routes>
     </BrowserRouter>
   );
