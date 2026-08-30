@@ -1,9 +1,9 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 
-import Home from "./pages/home";
-import Register from "./pages/register";
-import Dashboard from "./pages/dashboard";
-import Recover from "./pages/Recover";
+import Home from "./pages/Home.jsx";
+import Register from "./pages/Register.jsx";
+import Dashboard from "./pages/Dashboard.jsx";
+import Recover from "./pages/Recover.jsx";
 
 import "./App.css";
 
