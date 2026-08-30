@@ -1,11 +1,9 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import QRCode from "qrcode";
 import { supabase } from "../supabase";
 
 function Register() {
-  const navigate = useNavigate();
-
   const [form, setForm] = useState({
     ownerName: "",
     mobile: "",
@@ -17,10 +15,11 @@ function Register() {
     longitude: "",
   });
 
-  const [qrCode, setQrCode] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [success, setSuccess] = useState(false);
   const [recoveryId, setRecoveryId] = useState("");
   const [recoveryUrl, setRecoveryUrl] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [qrCode, setQrCode] = useState("");
 
   function handleChange(e) {
     const { name, value } = e.target;
@@ -32,17 +31,21 @@ function Register() {
   }
 
   function generateRecoveryId() {
-    const randomPart = Math.random()
-      .toString(36)
-      .substring(2, 8)
-      .toUpperCase();
+    const characters = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+
+    let randomPart = "";
+
+    for (let i = 0; i < 6; i++) {
+      randomPart +=
+        characters[Math.floor(Math.random() * characters.length)];
+    }
 
     return `RX-${randomPart}`;
   }
 
   function getLocation() {
     if (!navigator.geolocation) {
-      alert("Your browser does not support location services.");
+      alert("Location is not supported by this browser.");
       return;
     }
 
@@ -56,18 +59,18 @@ function Register() {
 
         setForm((previous) => ({
           ...previous,
-          location: mapsUrl,
           latitude: latitude.toString(),
           longitude: longitude.toString(),
+          location: mapsUrl,
         }));
       },
       (error) => {
+        console.error(error);
+
         if (error.code === 1) {
-          alert("Location permission was denied.");
-        } else if (error.code === 2) {
-          alert("Your location could not be found.");
-        } else if (error.code === 3) {
-          alert("Location request timed out.");
+          alert(
+            "Location permission was denied. Please allow location access."
+          );
         } else {
           alert("Unable to get your location.");
         }
@@ -88,7 +91,7 @@ function Register() {
       !form.mobile.trim() ||
       !form.email.trim() ||
       !form.itemName.trim() ||
-      !form.category
+      !form.category.trim()
     ) {
       alert("Please fill all required fields.");
       return;
@@ -102,31 +105,45 @@ function Register() {
     setLoading(true);
 
     try {
-      // Generate Recovery X ID
-      const id = generateRecoveryId();
+      // ==========================================
+      // 1. GENERATE RECOVERY ID
+      // ==========================================
 
-      // IMPORTANT:
-      // This is your PUBLIC Vercel website.
-      const url =
-        `https://recovery-pj0o4bpr9-varshithpattapuram14-3119s-projects.vercel.app/recover/${id}`;
+      const newRecoveryId = generateRecoveryId();
 
-      // Generate QR
-      const qr = await QRCode.toDataURL(url, {
+      // ==========================================
+      // 2. IMPORTANT:
+      // USE YOUR PERMANENT VERCEL DOMAIN
+      // ==========================================
+
+      const newRecoveryUrl =
+        `https://recovery-x-blue.vercel.app/recover/${newRecoveryId}`;
+
+      // ==========================================
+      // 3. GENERATE QR
+      // ==========================================
+
+      const newQrCode = await QRCode.toDataURL(newRecoveryUrl, {
         width: 500,
         margin: 2,
         errorCorrectionLevel: "H",
       });
 
-      // Data sent to Supabase
+      // ==========================================
+      // 4. SAVE TO SUPABASE
+      // ==========================================
+      //
       // DO NOT send "id".
-      // Supabase generates the numeric id automatically.
-      const newItem = {
-        recovery_id: id,
+      // Supabase generates the bigint id automatically.
+      //
+
+      const itemData = {
+        recovery_id: newRecoveryId,
         owner_name: form.ownerName.trim(),
         mobile: form.mobile.trim(),
         email: form.email.trim(),
         item_name: form.itemName.trim(),
-        category: form.category,
+        category: form.category.trim(),
         location: form.location || null,
         latitude: form.latitude
           ? parseFloat(form.latitude)
@@ -134,33 +151,43 @@ function Register() {
         longitude: form.longitude
           ? parseFloat(form.longitude)
           : null,
-        qr: qr,
-        recovery_url: url,
+        qr: newQrCode,
+        recovery_url: newRecoveryUrl,
       };
 
-      console.log("Sending to Supabase:", newItem);
+      console.log("Saving to Supabase:", itemData);
 
       const { data, error } = await supabase
         .from("items")
-        .insert([newItem])
+        .insert([itemData])
         .select()
         .single();
 
       if (error) {
-        console.error("SUPABASE ERROR:", error);
+        console.error("Supabase error:", error);
+
         alert(`Database error: ${error.message}`);
+
         return;
       }
 
-      console.log("Successfully saved:", data);
+      console.log("Successfully registered:", data);
 
-      setRecoveryId(id);
-      setQrCode(qr);
-      setRecoveryUrl(url);
+      // ==========================================
+      // 5. SHOW SUCCESS
+      // ==========================================
+
+      setRecoveryId(newRecoveryId);
+      setRecoveryUrl(newRecoveryUrl);
+      setQrCode(newQrCode);
+      setSuccess(true);
 
     } catch (error) {
-      console.error("REGISTRATION ERROR:", error);
-      alert(`Something went wrong while registering: ${error.message}`);
+      console.error("Registration error:", error);
+
+      alert(
+        `Something went wrong while registering: ${error.message}`
+      );
     } finally {
       setLoading(false);
     }
@@ -175,19 +202,35 @@ function Register() {
     link.download = `${recoveryId}-Recovery-X.png`;
 
     document.body.appendChild(link);
+
     link.click();
+
     document.body.removeChild(link);
   }
 
-  function openRecoveryPage() {
-    navigate(`/recover/${recoveryId}`);
+  function registerAnotherItem() {
+    setForm({
+      ownerName: "",
+      mobile: "",
+      email: "",
+      itemName: "",
+      category: "",
+      location: "",
+      latitude: "",
+      longitude: "",
+    });
+
+    setSuccess(false);
+    setRecoveryId("");
+    setRecoveryUrl("");
+    setQrCode("");
   }
 
-  // =========================
-  // SUCCESS SCREEN
-  // =========================
+  // ==========================================
+  // SUCCESS PAGE
+  // ==========================================
 
-  if (recoveryId) {
+  if (success) {
     return (
       <div className="app">
 
@@ -200,87 +243,124 @@ function Register() {
 
           <nav>
             <Link to="/">Home</Link>
-            <Link to="/dashboard">My Items</Link>
           </nav>
 
         </header>
 
-        <main className="success-page">
+        <main className="form-page">
 
-          <div className="success-card">
+          <div
+            className="success-card"
+            style={{
+              maxWidth: "600px",
+              margin: "40px auto",
+              padding: "30px",
+              textAlign: "center",
+            }}
+          >
 
-            <div className="success-icon">
+            <div
+              style={{
+                fontSize: "50px",
+                marginBottom: "10px",
+              }}
+            >
               ✓
             </div>
 
-            <h1>
-              Item Registered!
-            </h1>
+            <h1>Item Registered Successfully!</h1>
 
             <p>
-              Your Recovery X identity has
-              been successfully created.
-            </p>
-
-            <div className="recovery-id">
-              {recoveryId}
-            </div>
-
-            <img
-              src={qrCode}
-              alt="Recovery X QR Code"
-              className="generated-qr"
-            />
-
-            <h3>
-              Your Recovery X QR Code
-            </h3>
-
-            <p className="qr-info">
-              Download this QR code and attach
-              it to your item.
+              Your item has been registered with Recovery X.
             </p>
 
             <div
               style={{
-                marginTop: "15px",
-                padding: "12px",
+                margin: "25px auto",
+                padding: "12px 20px",
                 background: "#f3f4f6",
+                borderRadius: "10px",
+                fontSize: "22px",
+                fontWeight: "bold",
+                letterSpacing: "2px",
+              }}
+            >
+              {recoveryId}
+            </div>
+
+            {/* QR CODE */}
+
+            <img
+              src={qrCode}
+              alt="Recovery X QR Code"
+              style={{
+                width: "280px",
+                height: "280px",
+                display: "block",
+                margin: "20px auto",
+              }}
+            />
+
+            <h3>Your Recovery X QR Code</h3>
+
+            <p>
+              Scan this QR code to view the recovery information.
+            </p>
+
+            {/* IMPORTANT: SHOW THE URL */}
+
+            <div
+              style={{
+                marginTop: "20px",
+                padding: "15px",
+                background: "#f5f5f5",
                 borderRadius: "8px",
-                fontSize: "12px",
                 wordBreak: "break-all",
+                fontSize: "13px",
               }}
             >
               {recoveryUrl}
             </div>
 
-            <div className="success-actions">
-
-              <button
-                onClick={downloadQR}
-                className="primary-btn"
-              >
-                Download QR
-              </button>
-
-              <button
-                onClick={openRecoveryPage}
-                className="secondary-btn"
-              >
-                View Recovery Page
-              </button>
-
-            </div>
+            {/* DOWNLOAD */}
 
             <button
-              onClick={() => navigate("/dashboard")}
-              className="secondary-btn"
+              type="button"
+              onClick={downloadQR}
+              className="generate-btn"
               style={{
-                marginTop: "12px",
-                width: "100%",
+                marginTop: "20px",
               }}
             >
-              Go to My Items
+              Download QR Code
+            </button>
+
+            {/* OPEN RECOVERY PAGE */}
+
+            <a
+              href={recoveryUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="location-link"
+              style={{
+                display: "block",
+                marginTop: "20px",
+              }}
+            >
+              Open Recovery Page →
+            </a>
+
+            {/* REGISTER ANOTHER */}
+
+            <button
+              type="button"
+              onClick={registerAnotherItem}
+              className="secondary-btn"
+              style={{
+                marginTop: "20px",
+              }}
+            >
+              Register Another Item
             </button>
 
           </div>
@@ -291,9 +371,9 @@ function Register() {
     );
   }
 
-  // =========================
-  // REGISTER FORM
-  // =========================
+  // ==========================================
+  // REGISTRATION FORM
+  // ==========================================
 
   return (
     <div className="app">
@@ -306,13 +386,7 @@ function Register() {
         </Link>
 
         <nav>
-          <Link to="/">
-            Home
-          </Link>
-
-          <Link to="/dashboard">
-            My Items
-          </Link>
+          <Link to="/">Home</Link>
         </nav>
 
       </header>
@@ -321,9 +395,7 @@ function Register() {
 
         <div className="form-header">
 
-          <span>
-            REGISTER YOUR ITEM
-          </span>
+          <span>REGISTER YOUR ITEM</span>
 
           <h1>
             Give your item
@@ -333,8 +405,8 @@ function Register() {
 
           <p>
             Register your belongings and generate
-            a unique QR code that helps people
-            return them to you.
+            a unique QR code to help return them
+            if they are lost.
           </p>
 
         </div>
@@ -344,21 +416,17 @@ function Register() {
           className="register-form"
         >
 
-          {/* OWNER */}
+          {/* OWNER INFORMATION */}
 
           <div className="form-section">
 
-            <h2>
-              👤 Owner Information
-            </h2>
+            <h2>👤 Owner Information</h2>
 
             <div className="form-grid">
 
               <div className="input-group">
 
-                <label>
-                  Owner Name *
-                </label>
+                <label>Owner Name *</label>
 
                 <input
                   type="text"
@@ -373,16 +441,14 @@ function Register() {
 
               <div className="input-group">
 
-                <label>
-                  📱 Mobile Number *
-                </label>
+                <label>📱 Mobile Number *</label>
 
                 <input
                   type="tel"
                   name="mobile"
                   value={form.mobile}
                   onChange={handleChange}
-                  placeholder="Enter 10-digit mobile number"
+                  placeholder="10-digit mobile number"
                   maxLength="10"
                   required
                 />
@@ -391,16 +457,14 @@ function Register() {
 
               <div className="input-group full">
 
-                <label>
-                  📧 Email ID *
-                </label>
+                <label>📧 Email *</label>
 
                 <input
                   type="email"
                   name="email"
                   value={form.email}
                   onChange={handleChange}
-                  placeholder="Enter your email address"
+                  placeholder="Enter your email"
                   required
                 />
 
@@ -410,21 +474,17 @@ function Register() {
 
           </div>
 
-          {/* ITEM */}
+          {/* ITEM INFORMATION */}
 
           <div className="form-section">
 
-            <h2>
-              🎒 Item Information
-            </h2>
+            <h2>🎒 Item Information</h2>
 
             <div className="form-grid">
 
               <div className="input-group">
 
-                <label>
-                  Item Name *
-                </label>
+                <label>Item Name *</label>
 
                 <input
                   type="text"
@@ -439,9 +499,7 @@ function Register() {
 
               <div className="input-group">
 
-                <label>
-                  📂 Category *
-                </label>
+                <label>📂 Category *</label>
 
                 <select
                   name="category"
@@ -498,13 +556,10 @@ function Register() {
 
           <div className="form-section">
 
-            <h2>
-              📍 Google Maps Location
-            </h2>
+            <h2>📍 Last Known Location</h2>
 
-            <p className="location-description">
-              Save the current location using
-              your device's GPS and Google Maps.
+            <p>
+              Save the current location of your item.
             </p>
 
             <button
@@ -519,24 +574,16 @@ function Register() {
 
               <div
                 style={{
-                  marginTop: "18px",
+                  marginTop: "15px",
                   padding: "15px",
                   background: "#f0fdf4",
-                  border: "1px solid #bbf7d0",
                   borderRadius: "10px",
                 }}
               >
 
-                <strong>
-                  ✓ Location saved
-                </strong>
+                <strong>✓ Location saved</strong>
 
-                <p
-                  style={{
-                    margin: "8px 0",
-                    fontSize: "13px",
-                  }}
-                >
+                <p>
                   Latitude: {form.latitude}
                   <br />
                   Longitude: {form.longitude}
@@ -546,9 +593,8 @@ function Register() {
                   href={form.location}
                   target="_blank"
                   rel="noreferrer"
-                  className="location-link"
                 >
-                  Open location in Google Maps →
+                  Open Location in Google Maps →
                 </a>
 
               </div>
@@ -565,7 +611,7 @@ function Register() {
             disabled={loading}
           >
             {loading
-              ? "Saving to Database..."
+              ? "Saving..."
               : "Generate Recovery X ID & QR"}
           </button>
 

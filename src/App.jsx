@@ -1,7 +1,7 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 
 import Home from "./pages/Home.jsx";
-import Register from "./pages/Register.jsx";
+import Register from "./pages/register.jsx";
 import Dashboard from "./pages/Dashboard.jsx";
 import Recover from "./pages/Recover.jsx";
 
@@ -14,11 +14,7 @@ function App() {
         <Route path="/" element={<Home />} />
         <Route path="/register" element={<Register />} />
         <Route path="/dashboard" element={<Dashboard />} />
-
-        <Route
-          path="/recover/:recoveryId"
-          element={<Recover />}
-        />
+        <Route path="/recover/:id" element={<Recover />} />
       </Routes>
     </BrowserRouter>
   );
