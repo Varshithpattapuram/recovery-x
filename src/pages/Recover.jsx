@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import { supabase } from "../supabase";
 
-function Recover() {
-  const { recoveryId } = useParams();
+export default function Recover() {
+  const { id } = useParams();
 
   const [item, setItem] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -11,244 +11,182 @@ function Recover() {
 
   useEffect(() => {
     async function findItem() {
-      setLoading(true);
-      setError("");
+      console.log("Recovery ID:", id);
 
-      const { data, error } = await supabase
+      if (!id) {
+        setError("Recovery ID is missing.");
+        setLoading(false);
+        return;
+      }
+
+      const recoveryId = id.trim().toUpperCase();
+
+      const { data, error: dbError } = await supabase
         .from("items")
         .select("*")
         .eq("recovery_id", recoveryId)
         .maybeSingle();
 
-      if (error) {
-        console.error("Supabase error:", error);
-        setError(error.message);
-      } else if (!data) {
-        setError("Recovery X item not found.");
-      } else {
-        setItem(data);
+      console.log("Supabase data:", data);
+      console.log("Supabase error:", dbError);
+
+      if (dbError) {
+        setError(dbError.message);
+        setLoading(false);
+        return;
       }
 
+      if (!data) {
+        setError(`No item found for ${recoveryId}`);
+        setLoading(false);
+        return;
+      }
+
+      setItem(data);
       setLoading(false);
     }
 
-    if (recoveryId) {
-      findItem();
-    } else {
-      setError("Invalid Recovery X ID.");
-      setLoading(false);
-    }
-  }, [recoveryId]);
+    findItem();
+  }, [id]);
 
   if (loading) {
     return (
-      <div className="app">
-        <header className="navbar">
-          <Link to="/" className="logo">
-            <span>RX</span>
-            Recovery X
-          </Link>
-        </header>
-
-        <main className="success-page">
-          <div className="success-card">
-            <h1>Finding your item...</h1>
-            <p>Please wait.</p>
-          </div>
-        </main>
+      <div style={styles.center}>
+        <h2>Finding item...</h2>
       </div>
     );
   }
 
-  if (error) {
+  if (!item) {
     return (
-      <div className="app">
-        <header className="navbar">
-          <Link to="/" className="logo">
-            <span>RX</span>
-            Recovery X
-          </Link>
-        </header>
+      <div style={styles.center}>
+        <div>
+          <h1>❌ Item Not Found</h1>
 
-        <main className="success-page">
-          <div className="success-card">
-
-            <div className="success-icon">
-              !
-            </div>
-
-            <h1>Item Not Found</h1>
-
-            <p>{error}</p>
-
-            <div
-              style={{
-                marginTop: "15px",
-                padding: "12px",
-                background: "#f3f4f6",
-                borderRadius: "8px",
-                wordBreak: "break-all",
-              }}
-            >
-              Recovery ID: {recoveryId}
-            </div>
-
-            <Link
-              to="/"
-              className="primary-btn"
-              style={{
-                display: "inline-block",
-                marginTop: "20px",
-                textDecoration: "none",
-              }}
-            >
-              Go Home
-            </Link>
-
-          </div>
-        </main>
-      </div>
-    );
-  }
-
-  return (
-    <div className="app">
-
-      <header className="navbar">
-
-        <Link to="/" className="logo">
-          <span>RX</span>
-          Recovery X
-        </Link>
-
-        <nav>
-          <Link to="/">Home</Link>
-          <Link to="/register">Register Item</Link>
-        </nav>
-
-      </header>
-
-      <main className="success-page">
-
-        <div className="success-card">
-
-          <div className="success-icon">
-            ✓
-          </div>
-
-          <h1>Item Found</h1>
+          <p>{error}</p>
 
           <p>
-            This item is registered with Recovery X.
+            Recovery ID: <strong>{id || "Missing"}</strong>
           </p>
 
-          <div
-            className="recovery-id"
-            style={{ marginTop: "15px" }}
-          >
-            {item.recovery_id}
-          </div>
-
-          <div
-            style={{
-              textAlign: "left",
-              marginTop: "25px",
-              padding: "20px",
-              background: "#f8fafc",
-              borderRadius: "12px",
-            }}
-          >
-
-            <h2>Item Information</h2>
-
-            <p>
-              <strong>Item:</strong>{" "}
-              {item.item_name}
-            </p>
-
-            <p>
-              <strong>Category:</strong>{" "}
-              {item.category}
-            </p>
-
-          </div>
-
-          <div
-            style={{
-              textAlign: "left",
-              marginTop: "15px",
-              padding: "20px",
-              background: "#f8fafc",
-              borderRadius: "12px",
-            }}
-          >
-
-            <h2>Owner Information</h2>
-
-            <p>
-              <strong>Name:</strong>{" "}
-              {item.owner_name}
-            </p>
-
-            <p>
-              <strong>Mobile:</strong>{" "}
-              {item.mobile}
-            </p>
-
-            <p>
-              <strong>Email:</strong>{" "}
-              {item.email}
-            </p>
-
-          </div>
-
-          {item.location && (
-            <div
-              style={{
-                marginTop: "15px",
-                padding: "20px",
-                background: "#f0fdf4",
-                borderRadius: "12px",
-              }}
-            >
-
-              <h2>Last Known Location</h2>
-
-              <a
-                href={item.location}
-                target="_blank"
-                rel="noreferrer"
-                className="location-link"
-              >
-                📍 Open Location in Google Maps →
-              </a>
-
-            </div>
-          )}
-
-          <div
-            style={{
-              marginTop: "20px",
-              padding: "15px",
-              background: "#fff7ed",
-              borderRadius: "10px",
-            }}
-          >
-            <strong>🔐 Recovery X</strong>
-
-            <p style={{ fontSize: "14px" }}>
-              If you found this item, please contact
-              the owner using the information above
-              to help return it safely.
-            </p>
-          </div>
-
+          <a href="/">Go Home</a>
         </div>
+      </div>
+    );
+  }
 
-      </main>
+  const mapUrl =
+    item.latitude != null && item.longitude != null
+      ? `https://www.google.com/maps/search/?api=1&query=${item.latitude},${item.longitude}`
+      : item.location;
 
+  return (
+    <div style={styles.page}>
+      <div style={styles.card}>
+
+        <div style={styles.success}>✓</div>
+
+        <h1>Item Found</h1>
+
+        <p style={styles.subtext}>
+          This item is registered with Recovery X.
+        </p>
+
+        <h2>{item.recovery_id}</h2>
+
+        <hr />
+
+        <h3>Item Information</h3>
+
+        <p>
+          <strong>Item:</strong> {item.item_name}
+        </p>
+
+        <p>
+          <strong>Category:</strong> {item.category}
+        </p>
+
+        <hr />
+
+        <h3>Owner Information</h3>
+
+        <p>
+          <strong>Name:</strong> {item.owner_name}
+        </p>
+
+        <p>
+          <strong>Mobile:</strong> {item.mobile}
+        </p>
+
+        <p>
+          <strong>Email:</strong> {item.email}
+        </p>
+
+        {mapUrl && (
+          <>
+            <hr />
+
+            <h3>Last Known Location</h3>
+
+            <a
+              href={mapUrl}
+              target="_blank"
+              rel="noreferrer"
+            >
+              📍 Open Location in Google Maps →
+            </a>
+          </>
+        )}
+
+        <hr />
+
+        <p style={styles.footer}>
+          🔐 Recovery X
+        </p>
+
+      </div>
     </div>
   );
 }
 
-export default Recover;
+const styles = {
+  page: {
+    minHeight: "100vh",
+    background: "#f5f7fb",
+    padding: "30px 20px",
+    fontFamily: "Arial, sans-serif",
+  },
+
+  card: {
+    maxWidth: "600px",
+    margin: "0 auto",
+    background: "#ffffff",
+    padding: "30px",
+    borderRadius: "20px",
+    boxShadow: "0 10px 35px rgba(0,0,0,0.08)",
+  },
+
+  center: {
+    minHeight: "100vh",
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "center",
+    textAlign: "center",
+    fontFamily: "Arial, sans-serif",
+    padding: "20px",
+  },
+
+  success: {
+    fontSize: "55px",
+    textAlign: "center",
+  },
+
+  subtext: {
+    color: "#666",
+  },
+
+  footer: {
+    textAlign: "center",
+    color: "#777",
+  },
+};
